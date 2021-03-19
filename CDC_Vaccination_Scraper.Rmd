@@ -1,0 +1,114 @@
+---
+title: "CDC_Vaccination_Scraper"
+author: "Leo Glowacki"
+date: "9/29/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rvest)
+library(tidyverse)
+```
+
+```{r}
+rec_levels = c("All travelers", "Most travelers", "Some travelers")
+
+remove_rest_of_colname = function(x) {
+    str_replace(x, "\\r\\n .*", "")
+}
+
+make_rec_level = function(x, rec_levels) {
+  if (x %in% rec_levels) {
+    x
+  } else {
+    NA
+  }
+}
+
+make_country_df_tidy = function(df, rec_levels, country_name) {
+  # fix duplicate column names
+  # valid_column_names = make.names(names=names(country), unique=TRUE, allow_ = TRUE)
+  # names(country) = valid_column_names
+  
+  country %>% 
+    #select(-c("Find.Out.Why", "Protect.Yourself")) %>% 
+    select(-c(`Clinical Guidance for Healthcare providers`)) %>% 
+    # mutate(X = remove_rest_of_colname(X)) %>% 
+    # rowwise() %>% 
+    # mutate(Rec_Level = make_rec_level(X, rec_levels)) %>% 
+    # ungroup() %>% 
+    # fill(Rec_Level) %>% 
+    # filter(!(X %in% rec_levels)) %>% 
+    rename(Vaccine = `Vaccines for disease`) %>% 
+    add_column(Country = rep.int(country_name, nrow(.))) %>% 
+    select(Country, everything())
+}
+```
+
+
+```{r}
+country = read_html("https://wwwnc.cdc.gov/travel/destinations/traveler/none/france") %>% html_node("#dest-vm-a") %>% html_table()
+
+tidy_country = make_country_df_tidy(country, rec_levels, "france")
+```
+
+```{r}
+url_list = read_html("https://wwwnc.cdc.gov/travel/destinations/list") %>% 
+            html_nodes(".list-bullet a") %>% 
+            html_attr(name = "href")
+
+#create empty df with all the columns we want from the previous df
+big_df = tidy_country[FALSE,]
+
+for (url in url_list) {
+  full_url = paste0("https://wwwnc.cdc.gov", url)
+  print(full_url)
+  country_name = sub('.*\\/', '', full_url)
+  print(country_name)
+  country_node = read_html(full_url) %>% html_node("#dest-vm-a") 
+  
+  if (!is.na(country_node %>% html_attr("class") == "disease")) {
+    country = country_node %>% html_table()
+    tidy_country = make_country_df_tidy(country, rec_levels, country_name)
+    
+    # drop any columns in new_df not in big_df
+    #new_df = new_df %>% select(-setdiff(names(new_df), names(big_df)))
+    # add our df for this one stock to the collective df
+    big_df = big_df %>% add_row(tidy_country)
+  } else {
+    big_df = big_df %>% add_row(Country = country_name, Vaccine = NA)
+  }
+  
+  
+
+  Sys.sleep(3)
+}
+
+```
+
+```{r}
+big_df = big_df %>% distinct()
+```
+
+
+```{r}
+write_csv(big_df, "full_country_vaccine_list.csv")
+```
+
+```{r}
+big_df %>% drop_na() %>% 
+  ggplot() + geom_bar(aes(x=fct_infreq(Vaccine))) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  labs(
+    title = "CDC Vaccine Recomendations by Count",
+    y = "Number of Destinations",
+    x = "Vaccine"
+  )
+```
+
+
+```{r}
+big_df %>% drop_na() %>% filter(str_detect(Vaccine, "Malaria"))
+```
+
