@@ -50,7 +50,7 @@ url_list = read_html("https://wwwnc.cdc.gov/travel/destinations/list") %>%
             html_attr(name = "href")
 
 #create empty df with all the columns we want from the previous df
-big_df = tidy_country[FALSE,]
+all_destination_df = tidy_country[FALSE,]
 
 for (url in url_list) {
   full_url = paste0("https://wwwnc.cdc.gov", url)
@@ -63,12 +63,12 @@ for (url in url_list) {
     country = country_node %>% html_table()
     tidy_country = make_country_df_tidy(country, rec_levels, country_name)
     
-    # drop any columns in new_df not in big_df
-    #new_df = new_df %>% select(-setdiff(names(new_df), names(big_df)))
+    # drop any columns in new_df not in all_destination_df
+    #new_df = new_df %>% select(-setdiff(names(new_df), names(all_destination_df)))
     # add our df for this one stock to the collective df
-    big_df = big_df %>% add_row(tidy_country)
+    all_destination_df = all_destination_df %>% add_row(tidy_country)
   } else {
-    big_df = big_df %>% add_row(Country = country_name, Vaccine = NA)
+    all_destination_df = all_destination_df %>% add_row(Country = country_name, Vaccine = NA)
   }
 
   # wait 3 seconds before scraping again
@@ -78,16 +78,16 @@ for (url in url_list) {
 ```
 
 ```{r distinct_rows}
-big_df = big_df %>% distinct()
+all_destination_df = all_destination_df %>% distinct()
 ```
 
 
 ```{r write_df_to_csv}
-write_csv(big_df, "full_country_vaccine_list.csv")
+write_csv(all_destination_df, "full_country_vaccine_list.csv")
 ```
 
 ```{r plot1}
-big_df %>% drop_na() %>% 
+all_destination_df %>% drop_na() %>% 
   ggplot() + geom_bar(aes(x=fct_infreq(Vaccine))) +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
   labs(
